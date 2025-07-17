@@ -1,4 +1,4 @@
-package com.monzo;
+package com.monzo.config;
 
 import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;

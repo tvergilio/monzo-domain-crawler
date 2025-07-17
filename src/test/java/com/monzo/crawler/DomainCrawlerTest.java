@@ -1,6 +1,10 @@
-package com.monzo;
+package com.monzo.crawler;
 
 import org.junit.jupiter.api.*;
+
+import com.monzo.config.CrawlerConfig;
+import com.monzo.config.RedisConfig;
+import com.monzo.queue.RedisFrontierQueue;
 
 import static org.junit.jupiter.api.Assertions.*;
 

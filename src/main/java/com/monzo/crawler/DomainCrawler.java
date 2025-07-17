@@ -1,11 +1,15 @@
 
-package com.monzo;
+package com.monzo.crawler;
 
 import java.util.Objects;
 import java.util.Random;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
+
+import com.monzo.config.CrawlerConfig;
+import com.monzo.queue.FrontierQueue;
+import com.monzo.queue.RedisFrontierQueue;
 
 /**
  * Main entry point for the Monzo Domain Crawler.

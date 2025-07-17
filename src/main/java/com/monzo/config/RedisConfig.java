@@ -1,4 +1,4 @@
-package com.monzo;
+package com.monzo.config;
 
 /**
  * Configuration for RedisFrontierQueue.

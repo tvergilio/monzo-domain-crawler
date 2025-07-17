@@ -1,4 +1,4 @@
-package com.monzo;
+package com.monzo.config;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterEach;
