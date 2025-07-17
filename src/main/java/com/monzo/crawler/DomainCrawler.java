@@ -40,9 +40,13 @@ public final class DomainCrawler {
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             var task = (Runnable) () -> {
                 try {
-                    var url = frontier.pop();
-                    if (url == null) return;
-                    crawl(url);
+                    while (true) {
+                        var url = frontier.pop();
+                        if (url == null) {
+                            break;
+                        }
+                        crawl(url);
+                    }
                 } catch (Exception e) {
                     System.err.printf("Crawl error: %s%n", e.getMessage());
                 }
