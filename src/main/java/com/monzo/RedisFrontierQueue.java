@@ -14,6 +14,66 @@ import java.util.concurrent.atomic.AtomicReference;
  * Designed for concurrency and production robustness.
  */
 public class RedisFrontierQueue implements FrontierQueue {
+
+    /**
+     * Configuration constants, overridable via environment variables, initialised per instance.
+     */
+    private static final String DEFAULT_REDIS_HOST = "localhost";
+    private static final int DEFAULT_REDIS_PORT = 6379;
+    private static final String DEFAULT_QUEUE_KEY = "frontier:queue";
+    private static final String DEFAULT_VISITED_SET_KEY = "frontier:visited";
+    private static final int DEFAULT_BRPOP_TIMEOUT = 5; // seconds
+    private static final String LUA_DEDUP_SCRIPT = "if redis.call('SADD', KEYS[2], ARGV[1]) == 1 then return redis.call('LPUSH', KEYS[1], ARGV[1]) else return 0 end";
+
+    private final String queueKey;
+    private final String visitedSetKey;
+    private final int brpopTimeout;
+
+    private final JedisPool jedisPool;
+    private final ExecutorService executor;
+    private final AtomicReference<String> dedupScriptSha1 = new AtomicReference<>();
+
+    /**
+     * Creates a new RedisFrontierQueue with default configuration (localhost:6379, default keys).
+     */
+    public RedisFrontierQueue() {
+        this(buildConfigFromEnv());
+    }
+
+    /**
+     * Constructs a RedisFrontierQueue using the provided configuration.
+     * @param config Configuration object
+     */
+    public RedisFrontierQueue(RedisConfig config) {
+        var poolConfig = new JedisPoolConfig();
+        poolConfig.setMaxTotal(128);
+        poolConfig.setMaxIdle(32);
+        poolConfig.setMinIdle(16);
+        poolConfig.setTestOnBorrow(true);
+        this.jedisPool = new JedisPool(poolConfig, config.getHost(), config.getPort());
+        this.executor = Executors.newVirtualThreadPerTaskExecutor();
+        this.queueKey = config.getQueueKey();
+        this.visitedSetKey = config.getVisitedSetKey();
+        this.brpopTimeout = config.getBrpopTimeout();
+        // Load Lua script and cache SHA1
+        try (var jedis = jedisPool.getResource()) {
+            dedupScriptSha1.set(jedis.scriptLoad(LUA_DEDUP_SCRIPT));
+        } catch (Exception e) {
+            dedupScriptSha1.set(null);
+        }
+    }
+
+    /**
+     * For testing purposes only - allows providing a pre-configured JedisPool and executor.
+     */
+    RedisFrontierQueue(JedisPool jedisPool, ExecutorService executor) {
+        this.jedisPool = jedisPool;
+        this.executor = executor;
+        this.queueKey = DEFAULT_QUEUE_KEY;
+        this.visitedSetKey = DEFAULT_VISITED_SET_KEY;
+        this.brpopTimeout = DEFAULT_BRPOP_TIMEOUT;
+    }
+
     /**
      * Ensures the Lua script is loaded and returns the SHA1.
      * If not loaded, loads it. If Redis lost the script, reloads it.
@@ -26,45 +86,28 @@ public class RedisFrontierQueue implements FrontierQueue {
         }
         return dedupScriptSha1.get();
     }
-    private static final String QUEUE_KEY = "frontier:queue";
-    private static final String VISITED_SET_KEY = "frontier:visited";
-    private static final int BRPOP_TIMEOUT = 5; // seconds
-    private static final String LUA_DEDUP_SCRIPT = "if redis.call('SADD', KEYS[2], ARGV[1]) == 1 then return redis.call('LPUSH', KEYS[1], ARGV[1]) else return 0 end";
 
-    private final JedisPool jedisPool;
-    private final ExecutorService executor;
-    private final AtomicReference<String> dedupScriptSha1 = new AtomicReference<>();
-
-    /**
-     * Creates a new RedisFrontierQueue with default host and port (localhost:6379).
-     */
-    public RedisFrontierQueue() {
-        this("localhost", 6379);
+    private static RedisConfig buildConfigFromEnv() {
+        return new RedisConfig()
+            .withHost(System.getenv().getOrDefault("MDC_REDIS_HOST", DEFAULT_REDIS_HOST))
+            .withPort(parseIntOrDefault(System.getenv("MDC_REDIS_PORT"), DEFAULT_REDIS_PORT))
+            .withQueueKey(System.getenv().getOrDefault("MDC_QUEUE_KEY", DEFAULT_QUEUE_KEY))
+            .withVisitedSetKey(System.getenv().getOrDefault("MDC_VISITED_SET_KEY", DEFAULT_VISITED_SET_KEY))
+            .withBrpopTimeout(parseIntOrDefault(System.getenv("MDC_BRPOP_TIMEOUT"), DEFAULT_BRPOP_TIMEOUT));
     }
 
     /**
-     * For testing purposes only - allows providing a pre-configured JedisPool and executor.
-     *
-     * @param jedisPool The JedisPool to use
-     * @param executor The executor for async operations
+     * Parses an integer from a string, returning a default if parsing fails.
+     * @param value The string to parse
+     * @param defaultValue The default value to use if parsing fails
+     * @return The parsed integer or the default
      */
-    RedisFrontierQueue(JedisPool jedisPool, ExecutorService executor) {
-        this.jedisPool = jedisPool;
-        this.executor = executor;
-    }
-    public RedisFrontierQueue(String host, int port) {
-        var poolConfig = new JedisPoolConfig();
-        poolConfig.setMaxTotal(128);
-        poolConfig.setMaxIdle(32);
-        poolConfig.setMinIdle(16);
-        poolConfig.setTestOnBorrow(true);
-        this.jedisPool = new JedisPool(poolConfig, host, port);
-        this.executor = Executors.newVirtualThreadPerTaskExecutor();
-        // Load Lua script and cache SHA1
-        try (var jedis = jedisPool.getResource()) {
-            dedupScriptSha1.set(jedis.scriptLoad(LUA_DEDUP_SCRIPT));
-        } catch (Exception e) {
-            dedupScriptSha1.set(null);
+    private static int parseIntOrDefault(String value, int defaultValue) {
+        if (value == null || value.isEmpty()) return defaultValue;
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            return defaultValue;
         }
     }
 
@@ -76,13 +119,13 @@ public class RedisFrontierQueue implements FrontierQueue {
         try (var jedis = jedisPool.getResource()) {
             String sha1 = ensureLuaScriptLoaded(jedis);
             try {
-                Object result = jedis.evalsha(sha1, 2, QUEUE_KEY, VISITED_SET_KEY, url);
+                Object result = jedis.evalsha(sha1, 2, queueKey, visitedSetKey, url);
                 return Long.valueOf(1).equals(result);
             } catch (redis.clients.jedis.exceptions.JedisNoScriptException e) {
                 // Script was flushed from Redis, reload and retry
                 sha1 = jedis.scriptLoad(LUA_DEDUP_SCRIPT);
                 dedupScriptSha1.set(sha1);
-                Object result = jedis.evalsha(sha1, 2, QUEUE_KEY, VISITED_SET_KEY, url);
+                Object result = jedis.evalsha(sha1, 2, queueKey, visitedSetKey, url);
                 return Long.valueOf(1).equals(result);
             }
         }
@@ -99,14 +142,14 @@ public class RedisFrontierQueue implements FrontierQueue {
             return false;
         }
         try (var jedis = jedisPool.getResource()) {
-            return jedis.sismember(VISITED_SET_KEY, url);
+            return jedis.sismember(visitedSetKey, url);
         }
     }
 
     @Override
     public String pop() {
         try (var jedis = jedisPool.getResource()) {
-            return jedis.rpop(QUEUE_KEY);
+            return jedis.rpop(queueKey);
         }
     }
 
@@ -114,7 +157,7 @@ public class RedisFrontierQueue implements FrontierQueue {
     public CompletableFuture<String> popAsync() {
         return CompletableFuture.supplyAsync(() -> {
             try (var jedis = jedisPool.getResource()) {
-                var result = jedis.brpop(BRPOP_TIMEOUT, QUEUE_KEY);
+                var result = jedis.brpop(brpopTimeout, queueKey);
                 if (result == null || result.size() < 2) {
                     return null;
                 }
@@ -130,7 +173,7 @@ public class RedisFrontierQueue implements FrontierQueue {
      */
     public long visitedCount() {
         try (var jedis = jedisPool.getResource()) {
-            Long count = jedis.scard(VISITED_SET_KEY);
+            Long count = jedis.scard(visitedSetKey);
             return count != null ? count : 0;
         }
     }
@@ -138,7 +181,7 @@ public class RedisFrontierQueue implements FrontierQueue {
     @Override
     public int size() {
         try (var jedis = jedisPool.getResource()) {
-            Long length = jedis.llen(QUEUE_KEY);
+            Long length = jedis.llen(queueKey);
             return length != null ? length.intValue() : 0;
         }
     }
@@ -155,7 +198,7 @@ public class RedisFrontierQueue implements FrontierQueue {
     @Override
     public void clear() {
         try (var jedis = jedisPool.getResource()) {
-            jedis.del(QUEUE_KEY);
+            jedis.del(queueKey);
         }
     }
 
@@ -165,7 +208,7 @@ public class RedisFrontierQueue implements FrontierQueue {
      */
     public void clearAll() {
         try (var jedis = jedisPool.getResource()) {
-            jedis.del(QUEUE_KEY, VISITED_SET_KEY);
+            jedis.del(queueKey, visitedSetKey);
         }
     }
 
