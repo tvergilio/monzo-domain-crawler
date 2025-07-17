@@ -22,7 +22,7 @@
 | **MDC‑3**  | `FrontierQueue` abstraction              | `push`, `pop`, `isEmpty`; Javadoc                    | M        | XS   | Done |
 | **MDC‑4**  | `RedisFrontierQueue` impl + dedupe       | `LPUSH`/`BRPOP`; atomic dedupe via `SADD` (Lua)      | M        | S    | Done |
 | **MDC‑5**  | Simple config constants                  | Hard‑coded defaults; overridable via env vars        | M        | XS   | Done |
-| **MDC‑6**  | Concurrency via virtual threads          | Fixed-size pool; configurable parallelism            | M        | S    | Not started |
+| **MDC‑6**  | Concurrency via virtual threads          | Fixed-size pool; configurable parallelism            | M        | S    | In progress |
 | **MDC‑7**  | HTML fetch + parse                       | Java `HttpClient`; Jsoup extracts absolute links     | M        | S    | Not started |
 | **MDC‑8**  | Same‑domain filter                       | Enqueue only links whose host endsWith(seedHost)     | M        | XS   | Not started |
 | **MDC‑9**  | Output results                           | Print visited URL and its links to stdout            | M        | XS   | Not started |

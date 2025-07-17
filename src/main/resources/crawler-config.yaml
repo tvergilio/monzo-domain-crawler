@@ -1,0 +1,12 @@
+startUrl: "https://en.wikipedia.org"
+timeoutMs: 10000
+concurrency: 8
+maxDepth: 5
+backoffBaseMs: 100
+backoffMaxMs: 10000
+backoffJitterMs: 500
+backoffRetries: 3
+redis:
+  host: "localhost"
+  port: 6379
+
