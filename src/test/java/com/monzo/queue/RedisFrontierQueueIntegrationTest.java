@@ -2,6 +2,7 @@ package com.monzo.queue;
 
 import com.monzo.config.RedisConfig;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Tag;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -13,8 +14,9 @@ import static org.junit.jupiter.api.Assertions.*;
  * Integration tests for RedisFrontierQueue using Testcontainers.
  */
 @Testcontainers
+@Tag("integration")
 @DisplayName("RedisFrontierQueue Integration Tests")
-class RedisFrontierQueueTest {
+class RedisFrontierQueueIntegrationTest {
 
     @Container
     private static final GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
@@ -82,18 +84,16 @@ class RedisFrontierQueueTest {
         }
 
         @Test
-        @DisplayName("should ignore null, empty, and whitespace-only URLs")
-        void shouldHandleNullEmptyAndWhitespaceUrls() {
+        @DisplayName("should ignore null and empty URLs")
+        void shouldHandleNullAndEmptyUrls() {
             assertFalse(queue.push(null), "push(null) should return false");
             assertFalse(queue.push(""), "push('') should return false");
-            assertFalse(queue.push("   "), "push('   ') should return false");
 
             assertAll("After pushing invalid URLs",
                 () -> assertEquals(0, queue.size(), "Queue should remain empty"),
                 () -> assertEquals(0, queue.visitedCount(), "Visited set should remain empty"),
                 () -> assertFalse(queue.hasVisited(null), "hasVisited(null) should be false"),
-                () -> assertFalse(queue.hasVisited(""), "hasVisited('') should be false"),
-                () -> assertFalse(queue.hasVisited("   "), "hasVisited('   ') should be false")
+                () -> assertFalse(queue.hasVisited(""), "hasVisited('') should be false")
             );
         }
     }

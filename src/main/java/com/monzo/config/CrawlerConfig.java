@@ -103,7 +103,7 @@ public final class CrawlerConfig {
      *  YAML helpers                                                      *
      * ------------------------------------------------------------------ */
 
-    private static Builder loadBuilderFromYaml(String source) {
+    static Builder loadBuilderFromYaml(String source) {
         var yaml = new Yaml(new Constructor(CrawlerConfigYaml.class, new LoaderOptions()));
 
         try (InputStream in = open(source)) {

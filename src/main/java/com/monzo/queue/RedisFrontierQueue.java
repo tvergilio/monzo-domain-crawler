@@ -115,7 +115,7 @@ public class RedisFrontierQueue implements FrontierQueue {
 
     @Override
     public boolean push(String url) {
-        if (url == null || url.isEmpty()) {
+        if (url == null || url.trim().isEmpty()) {
             return false;
         }
         try (var jedis = jedisPool.getResource()) {

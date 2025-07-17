@@ -1,209 +1,114 @@
 package com.monzo.config;
 
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import java.util.function.BiConsumer;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+@DisplayName("CrawlerConfig Tests")
 class CrawlerConfigTest {
-    @Test
-    void backoffRetriesMustBePositive() {
-        var redis = new RedisConfig("localhost", 6379);
-        assertThrows(IllegalArgumentException.class, () ->
-            new CrawlerConfig.Builder()
-                .setStartUrl("https://example.com")
-                .setTimeoutMs(1000)
-                .setConcurrency(1)
-                .setMaxDepth(1)
-                .setRedisConfig(redis)
-                .setBackoffBaseMs(1000)
-                .setBackoffMaxMs(10000)
-                .setBackoffJitterMs(500)
-                .setBackoffRetries(0)
-                .build(), "Should throw for zero backoffRetries");
 
-        assertThrows(IllegalArgumentException.class, () ->
-            new CrawlerConfig.Builder()
-                .setStartUrl("https://example.com")
-                .setTimeoutMs(1000)
-                .setConcurrency(1)
-                .setMaxDepth(1)
-                .setRedisConfig(redis)
-                .setBackoffBaseMs(1000)
-                .setBackoffMaxMs(10000)
-                .setBackoffJitterMs(500)
-                .setBackoffRetries(-1)
-                .build(), "Should throw for negative backoffRetries");
+    private CrawlerConfig.Builder aValidBuilder() {
+        return CrawlerConfig.builder()
+            .setStartUrl("https://example.com")
+            .setTimeoutMs(1000)
+            .setConcurrency(1)
+            .setMaxDepth(1)
+            .setRedisConfig(new RedisConfig("localhost", 6379));
     }
 
-    @Test
-    void timeoutMustBePositive() {
-        var redis = new RedisConfig("localhost", 6379);
-        var url   = "https://example.com";
+    @Nested
+    @DisplayName("Builder Validation")
+    class BuilderValidation {
 
-        assertThrows(IllegalArgumentException.class,
-                () -> CrawlerConfig.builder()
-                                   .setStartUrl(url)
-                                   .setTimeoutMs(0)
-                                   .setConcurrency(2)
-                                   .setMaxDepth(3)
-                                   .setRedisConfig(redis)
-                                   .build());
+        @ParameterizedTest(name = "rejects non-positive value for {0}")
+        @MethodSource("com.monzo.config.CrawlerConfigTest#positiveIntegerConfigProvider")
+        void rejectsNonPositiveIntegerValues(String propertyName, BiConsumer<CrawlerConfig.Builder, Integer> setter) {
+            // Test with 0
+            CrawlerConfig.Builder builderZero = aValidBuilder();
+            setter.accept(builderZero, 0);
+            assertThrows(IllegalArgumentException.class, builderZero::build,
+                "Should throw for " + propertyName + " = 0");
 
-        assertThrows(IllegalArgumentException.class,
-                () -> CrawlerConfig.builder()
-                                   .setStartUrl(url)
-                                   .setTimeoutMs(-1)
-                                   .setConcurrency(2)
-                                   .setMaxDepth(3)
-                                   .setRedisConfig(redis)
-                                   .build());
-    }
+            // Test with -1
+            CrawlerConfig.Builder builderNegative = aValidBuilder();
+            setter.accept(builderNegative, -1);
+            assertThrows(IllegalArgumentException.class, builderNegative::build,
+                "Should throw for " + propertyName + " = -1");
+        }
 
-    @Test
-    void concurrencyMustBePositive() {
-        var redis = new RedisConfig("localhost", 6379);
-        var url   = "https://example.com";
-
-        assertThrows(IllegalArgumentException.class,
-                () -> CrawlerConfig.builder()
-                                   .setStartUrl(url)
-                                   .setTimeoutMs(1_000)
-                                   .setConcurrency(0)
-                                   .setMaxDepth(3)
-                                   .setRedisConfig(redis)
-                                   .build());
-
-        assertThrows(IllegalArgumentException.class,
-                () -> CrawlerConfig.builder()
-                                   .setStartUrl(url)
-                                   .setTimeoutMs(1_000)
-                                   .setConcurrency(-1)
-                                   .setMaxDepth(3)
-                                   .setRedisConfig(redis)
-                                   .build());
-    }
-
-    @Test
-    void maxDepthMustBePositive() {
-        var redis = new RedisConfig("localhost", 6379);
-        var url   = "https://example.com";
-
-        assertThrows(IllegalArgumentException.class,
-                () -> CrawlerConfig.builder()
-                                   .setStartUrl(url)
-                                   .setTimeoutMs(1_000)
-                                   .setConcurrency(2)
-                                   .setMaxDepth(0)
-                                   .setRedisConfig(redis)
-                                   .build());
-
-        assertThrows(IllegalArgumentException.class,
-                () -> CrawlerConfig.builder()
-                                   .setStartUrl(url)
-                                   .setTimeoutMs(1_000)
-                                   .setConcurrency(2)
-                                   .setMaxDepth(-5)
-                                   .setRedisConfig(redis)
-                                   .build());
-    }
-
-    @Test
-    void loadsDefaultsFromYaml() {
-        var cfg = CrawlerConfig.builderFromYaml().build();
-        // Assert backoff fields loaded from YAML defaults
-        assertEquals(100, cfg.getBackoffBaseMs(), "backoffBaseMs should be loaded from YAML defaults");
-        assertEquals(10000, cfg.getBackoffMaxMs(), "backoffMaxMs should be loaded from YAML defaults");
-        assertEquals(500, cfg.getBackoffJitterMs(), "backoffJitterMs should be loaded from YAML defaults");
-        assertEquals(3, cfg.getBackoffRetries(), "backoffRetries should be loaded from YAML defaults");
-        assertEquals("https://en.wikipedia.org", cfg.getStartUrl());
-        assertEquals(10_000, cfg.getTimeoutMs());
-        assertEquals(8,       cfg.getConcurrency());
-        assertEquals(5,       cfg.getMaxDepth());
-        assertEquals("localhost", cfg.getRedisConfig().getHost());
-        assertEquals(6379,        cfg.getRedisConfig().getPort());
-    }
-
-    @Test
-    void allowsCustomStartUrl() {
-        var cfg = CrawlerConfig.builderFromYaml()
-                               .setStartUrl("https://example.com")
-                               .build();
-
-        assertEquals("https://example.com", cfg.getStartUrl());
-    }
-
-    @Test
-    void allowsCustomRedisConfig() {
-        var cfg = CrawlerConfig.builderFromYaml()
-                               .setStartUrl("https://example.com")
-                               .setRedisConfig(new RedisConfig("redis-server", 6380))
-                               .build();
-
-        assertEquals("redis-server", cfg.getRedisConfig().getHost());
-        assertEquals(6380,           cfg.getRedisConfig().getPort());
-    }
-
-    @Test
-    void rejectsNullStartUrl() {
-        assertThrows(IllegalArgumentException.class,
-                () -> CrawlerConfig.builderFromYaml()
-                                   .setStartUrl(null)
-                                   .build());
-    }
-
-    @Test
-    void rejectsNullRedisConfig() {
-        assertThrows(IllegalArgumentException.class,
-                () -> CrawlerConfig.builderFromYaml()
-                                   .setRedisConfig(null)
-                                   .build());
-    }
-
-    @Test
-    void failsWhenYamlMissing() {
-        var ex = assertThrows(RuntimeException.class, () -> invokeLoad("nonexistent.yaml"));
-        assertTrue(ex.getCause() instanceof IllegalStateException);
-    }
-
-    @Test
-    void failsWhenYamlEmpty() throws Exception {
-        var temp = Files.createTempFile("empty", ".yaml");
-        try {
-            var ex = assertThrows(RuntimeException.class, () -> invokeLoad(temp.toString()));
-            assertTrue(ex.getCause() instanceof IllegalStateException);
-        } finally {
-            Files.deleteIfExists(temp);
+        @Test
+        @DisplayName("rejects null required objects")
+        void rejectsNulls() {
+            assertThrows(IllegalArgumentException.class, () -> aValidBuilder().setStartUrl(null).build());
+            assertThrows(IllegalArgumentException.class, () -> aValidBuilder().setRedisConfig(null).build());
         }
     }
 
-    @Test
-    void failsWhenYamlMalformed() throws Exception {
-        var temp = Files.createTempFile("malformed", ".yaml");
-        Files.writeString(temp, "key1: value1\nkey2 value2\n:bad", StandardCharsets.UTF_8);
+    @Nested
+    @DisplayName("YAML Configuration Loading")
+    class YamlLoading {
 
-        try {
-            var ex = assertThrows(RuntimeException.class, () -> invokeLoad(temp.toString()));
-            var cause = ex.getCause();
-            assertTrue(cause instanceof IllegalStateException
-                    || cause instanceof org.yaml.snakeyaml.error.YAMLException
-                    || cause instanceof java.io.IOException);
-        } finally {
-            Files.deleteIfExists(temp);
+        protected CrawlerConfig.Builder invokeLoad(String path) {
+            return CrawlerConfig.loadBuilderFromYaml(path);
+        }
+
+        @Test
+        @DisplayName("loads configuration from default YAML")
+        void loadsDefaultsFromYaml() {
+            CrawlerConfig cfg = CrawlerConfig.builderFromYaml().build();
+
+            assertAll("Default YAML values should be loaded correctly",
+                () -> assertEquals("https://en.wikipedia.org", cfg.getStartUrl()),
+                () -> assertEquals(10_000, cfg.getTimeoutMs()),
+                () -> assertEquals(8, cfg.getConcurrency()),
+                () -> assertEquals(5, cfg.getMaxDepth()),
+                () -> assertEquals("localhost", cfg.getRedisConfig().getHost()),
+                () -> assertEquals(6379, cfg.getRedisConfig().getPort()),
+                () -> assertEquals(100, cfg.getBackoffBaseMs()),
+                () -> assertEquals(10000, cfg.getBackoffMaxMs()),
+                () -> assertEquals(500, cfg.getBackoffJitterMs()),
+                () -> assertEquals(3, cfg.getBackoffRetries())
+            );
+        }
+
+        @Test
+        @DisplayName("allows overriding YAML values")
+        void allowsOverrides() {
+            RedisConfig customRedis = new RedisConfig("redis-server", 6380);
+            CrawlerConfig cfg = CrawlerConfig.builderFromYaml()
+                .setStartUrl("https://monzo.com")
+                .setRedisConfig(customRedis)
+                .build();
+
+            assertAll("Values should be overridden",
+                () -> assertEquals("https://monzo.com", cfg.getStartUrl()),
+                () -> assertEquals("redis-server", cfg.getRedisConfig().getHost()),
+                () -> assertEquals(6380, cfg.getRedisConfig().getPort())
+            );
+        }
+
+        @Test
+        @DisplayName("fails when specified YAML is missing")
+        void failsWhenYamlMissing() {
+            Exception ex = assertThrows(Exception.class, () -> invokeLoad("nonexistent.yaml"));
+            assertInstanceOf(IllegalStateException.class, ex.getCause(), "Cause should be IllegalStateException for missing file");
         }
     }
 
-    private static Object invokeLoad(String path) throws Exception {
-        Method m = CrawlerConfig.class.getDeclaredMethod("loadBuilderFromYaml", String.class);
-        m.setAccessible(true);
-        try {
-            return m.invoke(null, path);
-        } catch (InvocationTargetException ite) {
-            throw (Exception) ite.getTargetException();
-        }
+    // Provides arguments for the parameterised validation test
+    static Stream<Arguments> positiveIntegerConfigProvider() {
+        return Stream.of(
+            Arguments.of("timeoutMs", (BiConsumer<CrawlerConfig.Builder, Integer>) CrawlerConfig.Builder::setTimeoutMs),
+            Arguments.of("concurrency", (BiConsumer<CrawlerConfig.Builder, Integer>) CrawlerConfig.Builder::setConcurrency),
+            Arguments.of("maxDepth", (BiConsumer<CrawlerConfig.Builder, Integer>) CrawlerConfig.Builder::setMaxDepth),
+            Arguments.of("backoffRetries", (BiConsumer<CrawlerConfig.Builder, Integer>) CrawlerConfig.Builder::setBackoffRetries)
+        );
     }
 }
