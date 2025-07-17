@@ -5,6 +5,7 @@ import redis.clients.jedis.JedisPoolConfig;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Redis-backed implementation of the FrontierQueue abstraction.
@@ -20,10 +21,10 @@ public class RedisFrontierQueue implements FrontierQueue {
      * @return SHA1 of the loaded script
      */
     private String ensureLuaScriptLoaded(redis.clients.jedis.Jedis jedis) {
-        if (dedupScriptSha1 == null) {
-            dedupScriptSha1 = jedis.scriptLoad(LUA_DEDUP_SCRIPT);
+        if (dedupScriptSha1.get() == null) {
+            dedupScriptSha1.set(jedis.scriptLoad(LUA_DEDUP_SCRIPT));
         }
-        return dedupScriptSha1;
+        return dedupScriptSha1.get();
     }
     private static final String QUEUE_KEY = "frontier:queue";
     private static final String VISITED_SET_KEY = "frontier:visited";
@@ -32,7 +33,7 @@ public class RedisFrontierQueue implements FrontierQueue {
 
     private final JedisPool jedisPool;
     private final ExecutorService executor;
-    private volatile String dedupScriptSha1;
+    private final AtomicReference<String> dedupScriptSha1 = new AtomicReference<>();
 
     /**
      * Creates a new RedisFrontierQueue with default host and port (localhost:6379).
@@ -61,9 +62,9 @@ public class RedisFrontierQueue implements FrontierQueue {
         this.executor = Executors.newVirtualThreadPerTaskExecutor();
         // Load Lua script and cache SHA1
         try (var jedis = jedisPool.getResource()) {
-            this.dedupScriptSha1 = jedis.scriptLoad(LUA_DEDUP_SCRIPT);
+            dedupScriptSha1.set(jedis.scriptLoad(LUA_DEDUP_SCRIPT));
         } catch (Exception e) {
-            this.dedupScriptSha1 = null;
+            dedupScriptSha1.set(null);
         }
     }
 
@@ -80,7 +81,7 @@ public class RedisFrontierQueue implements FrontierQueue {
             } catch (redis.clients.jedis.exceptions.JedisNoScriptException e) {
                 // Script was flushed from Redis, reload and retry
                 sha1 = jedis.scriptLoad(LUA_DEDUP_SCRIPT);
-                dedupScriptSha1 = sha1;
+                dedupScriptSha1.set(sha1);
                 Object result = jedis.evalsha(sha1, 2, QUEUE_KEY, VISITED_SET_KEY, url);
                 return Long.valueOf(1).equals(result);
             }
@@ -147,6 +148,10 @@ public class RedisFrontierQueue implements FrontierQueue {
         return size() == 0;
     }
 
+    /**
+     * Clears only the queue, leaving the visited set intact.
+     * Useful for resetting the queue while preserving deduplication.
+     */
     @Override
     public void clear() {
         try (var jedis = jedisPool.getResource()) {
@@ -155,7 +160,8 @@ public class RedisFrontierQueue implements FrontierQueue {
     }
 
     /**
-     * Clears both the queue and the visited set. Useful for testing or resetting the crawler.
+     * Clears both the queue and the visited set.
+     * Useful for full reset, including deduplication history.
      */
     public void clearAll() {
         try (var jedis = jedisPool.getResource()) {
@@ -164,11 +170,14 @@ public class RedisFrontierQueue implements FrontierQueue {
     }
 
     /**
-     * Closes the Redis connection pool.
+     * Closes the Redis connection pool and shuts down the executor service.
      */
     public void close() {
         if (jedisPool != null && !jedisPool.isClosed()) {
             jedisPool.close();
+        }
+        if (executor != null && !executor.isShutdown()) {
+            executor.shutdown();
         }
     }
 }

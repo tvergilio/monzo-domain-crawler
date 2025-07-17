@@ -89,5 +89,14 @@ public class RedisFrontierQueueTest {
         assertTrue(queue.hasVisited(url), "URL should still be marked as visited after pop");
         assertFalse(queue.push(url), "URL should be rejected as already visited");
     }
-   
+    
+    @Test
+    void shouldHandleNullAndEmptyUrls() {
+        assertFalse(queue.push(null), "push(null) should return false");
+        assertFalse(queue.push(""), "push(\"\") should return false");
+        assertEquals(0, queue.size(), "Queue should remain empty after push(null) and push(\"\")");
+        assertEquals(0, queue.visitedCount(), "Visited set should remain empty after push(null) and push(\"\")");
+        assertFalse(queue.hasVisited(null), "hasVisited(null) should return false");
+        assertFalse(queue.hasVisited(""), "hasVisited(\"\") should return false");
+    }
 }
