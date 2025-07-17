@@ -13,12 +13,26 @@ import java.util.concurrent.Executors;
  * Designed for concurrency and production robustness.
  */
 public class RedisFrontierQueue implements FrontierQueue {
+    /**
+     * Ensures the Lua script is loaded and returns the SHA1.
+     * If not loaded, loads it. If Redis lost the script, reloads it.
+     * @param jedis Jedis connection
+     * @return SHA1 of the loaded script
+     */
+    private String ensureLuaScriptLoaded(redis.clients.jedis.Jedis jedis) {
+        if (dedupScriptSha1 == null) {
+            dedupScriptSha1 = jedis.scriptLoad(LUA_DEDUP_SCRIPT);
+        }
+        return dedupScriptSha1;
+    }
     private static final String QUEUE_KEY = "frontier:queue";
     private static final String VISITED_SET_KEY = "frontier:visited";
     private static final int BRPOP_TIMEOUT = 5; // seconds
+    private static final String LUA_DEDUP_SCRIPT = "if redis.call('SADD', KEYS[2], ARGV[1]) == 1 then return redis.call('LPUSH', KEYS[1], ARGV[1]) else return 0 end";
 
     private final JedisPool jedisPool;
     private final ExecutorService executor;
+    private volatile String dedupScriptSha1;
 
     /**
      * Creates a new RedisFrontierQueue with default host and port (localhost:6379).
@@ -45,6 +59,12 @@ public class RedisFrontierQueue implements FrontierQueue {
         poolConfig.setTestOnBorrow(true);
         this.jedisPool = new JedisPool(poolConfig, host, port);
         this.executor = Executors.newVirtualThreadPerTaskExecutor();
+        // Load Lua script and cache SHA1
+        try (var jedis = jedisPool.getResource()) {
+            this.dedupScriptSha1 = jedis.scriptLoad(LUA_DEDUP_SCRIPT);
+        } catch (Exception e) {
+            this.dedupScriptSha1 = null;
+        }
     }
 
     @Override
@@ -53,10 +73,17 @@ public class RedisFrontierQueue implements FrontierQueue {
             return false;
         }
         try (var jedis = jedisPool.getResource()) {
-            // Atomic deduplication and enqueue using Lua script
-            String luaScript = "if redis.call('SADD', KEYS[2], ARGV[1]) == 1 then return redis.call('LPUSH', KEYS[1], ARGV[1]) else return 0 end";
-            Object result = jedis.eval(luaScript, 2, QUEUE_KEY, VISITED_SET_KEY, url);
-            return Long.valueOf(1).equals(result);
+            String sha1 = ensureLuaScriptLoaded(jedis);
+            try {
+                Object result = jedis.evalsha(sha1, 2, QUEUE_KEY, VISITED_SET_KEY, url);
+                return Long.valueOf(1).equals(result);
+            } catch (redis.clients.jedis.exceptions.JedisNoScriptException e) {
+                // Script was flushed from Redis, reload and retry
+                sha1 = jedis.scriptLoad(LUA_DEDUP_SCRIPT);
+                dedupScriptSha1 = sha1;
+                Object result = jedis.evalsha(sha1, 2, QUEUE_KEY, VISITED_SET_KEY, url);
+                return Long.valueOf(1).equals(result);
+            }
         }
     }
 
