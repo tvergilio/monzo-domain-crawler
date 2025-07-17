@@ -28,7 +28,6 @@ dependencies {
     implementation 'org.jsoup:jsoup:1.21.1'
 }
 
-// ADD THIS BLOCK TO YOUR BUILD.GRADLE FILE
 testing {
     suites {
         test {
