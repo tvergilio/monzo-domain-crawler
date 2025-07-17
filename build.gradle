@@ -18,8 +18,15 @@ dependencies {
     testImplementation "org.testcontainers:testcontainers:${testcontainersVersion}"
     testImplementation "org.testcontainers:junit-jupiter:${testcontainersVersion}"
 
+    // Mocking framework for unit tests
+    testImplementation 'org.mockito:mockito-core:5.18.0'
+    testImplementation 'org.mockito:mockito-junit-jupiter:5.18.0'
+
     // SnakeYAML for YAML configuration parsing
     implementation 'org.yaml:snakeyaml:2.4'
+
+    // Jsoup for HTML parsing
+    implementation 'org.jsoup:jsoup:1.21.1'
 }
 
 test {
