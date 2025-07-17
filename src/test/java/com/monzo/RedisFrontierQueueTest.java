@@ -26,7 +26,10 @@ public class RedisFrontierQueueTest {
     @BeforeEach
     void setUp() {
         var mappedPort = redisContainer.getMappedPort(REDIS_PORT);
-        queue = new RedisFrontierQueue(redisContainer.getHost(), mappedPort);
+        var config = new RedisConfig()
+            .withHost(redisContainer.getHost())
+            .withPort(mappedPort);
+        queue = new RedisFrontierQueue(config);
         queue.clearAll();
     }
 
@@ -98,5 +101,25 @@ public class RedisFrontierQueueTest {
         assertEquals(0, queue.visitedCount(), "Visited set should remain empty after push(null) and push(\"\")");
         assertFalse(queue.hasVisited(null), "hasVisited(null) should return false");
         assertFalse(queue.hasVisited(""), "hasVisited(\"\") should return false");
+    }
+
+    @Test
+    void shouldRespectCustomQueueAndVisitedSetKeys() {
+        var config = new RedisConfig()
+            .withHost(redisContainer.getHost())
+            .withPort(redisContainer.getMappedPort(REDIS_PORT))
+            .withQueueKey("test:queue")
+            .withVisitedSetKey("test:visited")
+            .withBrpopTimeout(2);
+        var queue = new RedisFrontierQueue(config);
+        queue.clearAll();
+        var url = "https://www.example.com";
+        assertTrue(queue.push(url), "Should accept new URL");
+        assertEquals(1, queue.size(), "Queue should have one item");
+        assertTrue(queue.hasVisited(url), "URL should be marked as visited");
+        queue.clearAll();
+        assertEquals(0, queue.size(), "Queue should be empty after clearAll");
+        assertFalse(queue.hasVisited(url), "URL should not be marked as visited after clearAll");
+        queue.close();
     }
 }
