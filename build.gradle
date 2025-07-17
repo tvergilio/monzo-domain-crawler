@@ -10,7 +10,6 @@ repositories {
 }
 
 dependencies {
-    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'
     implementation 'redis.clients:jedis:6.0.0'
     
     // Testcontainers for Redis integration testing
@@ -29,6 +28,11 @@ dependencies {
     implementation 'org.jsoup:jsoup:1.21.1'
 }
 
-test {
-    useJUnitPlatform()
+// ADD THIS BLOCK TO YOUR BUILD.GRADLE FILE
+testing {
+    suites {
+        test {
+            useJUnitJupiter('5.10.0')
+        }
+    }
 }

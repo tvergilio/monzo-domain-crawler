@@ -1,67 +1,81 @@
 package com.monzo.crawler;
 
-import org.junit.jupiter.api.*;
-
 import com.monzo.config.CrawlerConfig;
 import com.monzo.config.RedisConfig;
 import com.monzo.queue.RedisFrontierQueue;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+/**
+ * Unit tests for the DomainCrawler class, focusing on its initial configuration.
+ */
+@DisplayName("DomainCrawler")
 class DomainCrawlerTest {
 
-    private final String originalRedisHost = System.getenv("REDIS_HOST");
-    private final String originalRedisPort = System.getenv("REDIS_PORT");
+    @Nested
+    @DisplayName("when initialised from YAML config")
+    class WhenInitialisedFromYaml {
 
-    @BeforeEach
-    void clearEnv() {
-        if (originalRedisHost != null) System.clearProperty("REDIS_HOST");
-        if (originalRedisPort != null) System.clearProperty("REDIS_PORT");
+        @Test
+        @DisplayName("loads default values correctly")
+        void loadsDefaultValues() {
+            // Arrange
+            var config = CrawlerConfig.builderFromYaml().build();
+            var frontier = new RedisFrontierQueue(config.getRedisConfig());
+            var domainCrawler = new DomainCrawler(config, frontier);
+
+            // Assert
+            var redisConfig = domainCrawler.getConfig().getRedisConfig();
+            assertAll("Default configuration from YAML",
+                () -> assertEquals("https://en.wikipedia.org", domainCrawler.getStartUrl(), "Should load default start URL"),
+                () -> assertEquals("localhost", redisConfig.getHost(), "Should load default Redis host"),
+                () -> assertEquals(6379, redisConfig.getPort(), "Should load default Redis port")
+            );
+        }
+
+        @Test
+        @DisplayName("allows overriding the start URL")
+        void allowsOverridingStartUrl() {
+            // Arrange
+            var customUrl = "https://example.com";
+            var config = CrawlerConfig.builderFromYaml().setStartUrl(customUrl).build();
+            var frontier = new RedisFrontierQueue(config.getRedisConfig());
+            var domainCrawler = new DomainCrawler(config, frontier);
+
+            // Assert
+            assertEquals(customUrl, domainCrawler.getStartUrl(), "Start URL should be the overridden value");
+        }
     }
 
-    @AfterEach
-    void restoreEnv() {
-        if (originalRedisHost != null) System.setProperty("REDIS_HOST", originalRedisHost);
-        if (originalRedisPort != null) System.setProperty("REDIS_PORT", originalRedisPort);
-    }
+    @Nested
+    @DisplayName("when initialised with a custom builder")
+    class WhenInitialisedWithCustomBuilder {
 
-    @Test
-    void defaultInitialisation() {
-        var config = CrawlerConfig.builderFromYaml().build();
-        var redisConfig = config.getRedisConfig();
-        var frontier = new RedisFrontierQueue(redisConfig);
-        var domainCrawler = new DomainCrawler(config, frontier);
-        assertEquals("https://en.wikipedia.org", domainCrawler.getStartUrl());
-        assertEquals("localhost", redisConfig.getHost());
-        assertEquals(6379, redisConfig.getPort());
-    }
+        @Test
+        @DisplayName("uses all provided custom configuration")
+        void usesCustomConfiguration() {
+            // Arrange
+            var config = CrawlerConfig.builder()
+                .setStartUrl("https://example.com")
+                .setTimeoutMs(10_000)
+                .setConcurrency(8)
+                .setMaxDepth(5)
+                .setRedisConfig(new RedisConfig("redis-server", 6380))
+                .build();
+            var frontier = new RedisFrontierQueue(config.getRedisConfig());
+            var domainCrawler = new DomainCrawler(config, frontier);
 
-    @Test
-    void customStartUrl() {
-        var url = "https://example.com";
-        var config = CrawlerConfig.builderFromYaml().setStartUrl(url).build();
-        var redisConfig = config.getRedisConfig();
-        var frontier = new RedisFrontierQueue(redisConfig);
-        var domainCrawler = new DomainCrawler(config, frontier);
-        assertEquals(url, domainCrawler.getStartUrl());
-        assertEquals("localhost", redisConfig.getHost());
-        assertEquals(6379, redisConfig.getPort());
-    }
-
-    @Test
-    void customConfiguration() {
-        var cfg = CrawlerConfig.builder()
-                               .setStartUrl("https://example.com")
-                               .setTimeoutMs(10_000)
-                               .setConcurrency(8)
-                               .setMaxDepth(5)
-                               .setRedisConfig(new RedisConfig("redis-server", 6380))
-                               .build();
-        var frontier = new RedisFrontierQueue(cfg.getRedisConfig());
-        var domainCrawler = new DomainCrawler(cfg, frontier);
-        assertEquals("https://example.com", domainCrawler.getStartUrl());
-        var redis = domainCrawler.getConfig().getRedisConfig();
-        assertEquals("redis-server", redis.getHost());
-        assertEquals(6380, redis.getPort());
+            // Assert
+            var redisConfig = domainCrawler.getConfig().getRedisConfig();
+            assertAll("Custom configuration from builder",
+                () -> assertEquals("https://example.com", domainCrawler.getStartUrl()),
+                () -> assertEquals("redis-server", redisConfig.getHost()),
+                () -> assertEquals(6380, redisConfig.getPort())
+            );
+        }
     }
 }
