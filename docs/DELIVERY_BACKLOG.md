@@ -17,7 +17,7 @@
 
 | ID         | Story                                    | AC (summarised)                                      | Priority | Size | Status      |
 | ---------- | ---------------------------------------- | ---------------------------------------------------- | -------- | ---- | ----------- |
-| **MDC‑1**  | Gradle 21 skeleton                       | `build.gradle`; `./gradlew test` green               | M        | XS   | Not started |
+| **MDC‑1**  | Gradle 21 skeleton                       | `build.gradle`; `./gradlew test` green               | M        | XS   | In progress |
 | **MDC‑2**  | `docker‑compose.yml` (crawler and redis) | Two services; Redis health‑check; README quick‑start | M        | XS   | Not started |
 | **MDC‑3**  | `FrontierQueue` abstraction              | `push`, `pop`, `isEmpty`; Javadoc                    | M        | XS   | Not started |
 | **MDC‑4**  | `RedisFrontierQueue` impl + dedupe       | `LPUSH`/`BRPOP`; atomic dedupe via `SADD` (Lua)      | M        | S    | Not started |
