@@ -1,4 +1,4 @@
-package com.monzo;
+package com.monzo.config;
 
 /**
  * Configuration for RedisFrontierQueue.
@@ -14,6 +14,14 @@ public class RedisConfig {
     private int brpopTimeout = 5;
 
     public RedisConfig() {
+    }
+
+    public RedisConfig(String host, int port) {
+        if (host == null) {
+            throw new IllegalArgumentException("Redis host cannot be null");
+        }
+        this.host = host;
+        this.port = port;
     }
 
     public String getHost() {
@@ -59,5 +67,10 @@ public class RedisConfig {
     public RedisConfig withBrpopTimeout(int timeout) {
         this.brpopTimeout = timeout;
         return this;
+    }
+
+    @Override
+    public String toString() {
+        return host + ":" + port;
     }
 }

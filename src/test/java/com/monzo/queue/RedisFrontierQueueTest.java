@@ -1,10 +1,13 @@
-package com.monzo;
+package com.monzo.queue;
 
 import org.junit.jupiter.api.*;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
+
+import com.monzo.config.RedisConfig;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 /**

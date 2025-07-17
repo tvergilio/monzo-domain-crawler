@@ -1,4 +1,4 @@
-package com.monzo;
+package com.monzo.queue;
 
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.JedisPoolConfig;
@@ -6,6 +6,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
+
+import com.monzo.config.RedisConfig;
 
 /**
  * Redis-backed implementation of the FrontierQueue abstraction.
