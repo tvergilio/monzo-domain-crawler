@@ -1,0 +1,40 @@
+services:
+  crawler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: monzo-domain-crawler
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    networks:
+      - crawler-network
+    volumes:
+      - ./data:/app/data
+
+  redis:
+    image: redis:8.0-alpine
+    container_name: monzo-crawler-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - crawler-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    command: redis-server --appendonly yes
+
+networks:
+  crawler-network:
+    driver: bridge
+
+volumes:
+  redis-data:
