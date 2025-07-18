@@ -9,7 +9,6 @@ import org.junit.jupiter.params.provider.CsvSource;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -48,10 +47,7 @@ class DomainCrawlerSameDomainTest {
                         "https://monzo.com/careers",
                         "https://evil.com/",
                         "https://api.monzo.com/docs"));
-        var crawler = org.mockito.Mockito.spy(new DomainCrawler(cfg, fq, fetcher));
-        doReturn(200)
-                .when(crawler)
-                .simulateFetch(org.mockito.Mockito.anyString());
+        var crawler = new DomainCrawler(cfg, fq, fetcher);
 
         // Act
         crawler.runCrawlLoop();

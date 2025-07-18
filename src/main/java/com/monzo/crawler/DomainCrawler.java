@@ -74,21 +74,21 @@ public final class DomainCrawler {
         var urlHost = getHost(url);
         if (!sameDomain(seedHost, urlHost)) {
             System.err.printf("[WARN] Attempted to crawl %s, but host %s does not match seed host %s%n", url, urlHost, seedHost);
-            assert sameDomain(seedHost, urlHost) : "Attempted to crawl a different domain URL";
-        }
-        var status = simulateFetch(url);
-        if (status == 429 || status == 503) {
-            backoff(status);
+            // Guard: do not proceed if not same domain
             return;
         }
         try {
             var links = htmlFetcher.fetchAndExtractLinks(url);
+            System.out.printf("%s -> %d links%n", url, links.size());
             for (var link : links) {
                 var linkHost = getHost(link);
                 if (sameDomain(seedHost, linkHost)) {
                     frontier.push(link);
                 }
             }
+        } catch (RetriableStatusException re) {
+            backoff(re.getStatusCode());
+            return;
         } catch (Exception e) {
             System.err.printf("Failed to fetch or extract links from %s: %s%n", url, e.getMessage());
         }
@@ -126,10 +126,6 @@ public final class DomainCrawler {
         return linkHost.equals(seedHost) || linkHost.endsWith("." + seedHost);
     }
 
-    int simulateFetch(String url) {
-        var codes = new int[] { 200, 429, 503 };
-        return codes[RANDOM.nextInt(codes.length)];
-    }
 
     public static void main(String[] args) {
         var config = CrawlerConfig.builderFromYaml().build();
