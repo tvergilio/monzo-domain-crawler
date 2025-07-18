@@ -173,7 +173,7 @@ public final class DomainCrawler {
             var parser = new SimpleRobotRulesParser();
             return parser.parseContent(robotsUrl, resp.body(), "text/plain", List.of("monzo-crawler"));
         } catch (Exception e) {
-            log.warn("robots.txt fetch failed for {}: {}", host, e.getMessage());
+            log.warn("robots.txt fetch failed for {}: {}", host, e.getMessage(), e);
             return null;
         }
     }
