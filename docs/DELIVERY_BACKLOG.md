@@ -38,7 +38,7 @@
 | ID         | Story                         | AC (summarised)                    | Priority | Size | Status      |
 | ---------- | ----------------------------- | ---------------------------------- | -------- | ---- | ----------- |
 | **MDC‑13** | Integration tests              |  Testcontainers           | S        | S   | Done |
-| **MDC‑14** | GitHub Actions CI             | `gradle build` workflow            | S        | XS   | Not started |
+| **MDC‑14** | GitHub Actions CI             | `gradle build` workflow            | S        | XS   | Done |
 | **MDC‑15** | Graceful shutdown             | SIGTERM stops intake; await ≤2 s   | S        | S    | Not started |
 | **MDC‑16** | Prometheus metrics endpoint   | Micrometer core; expose `/metrics` | S        | S    | Not started |
 
