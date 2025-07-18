@@ -29,7 +29,6 @@ public final class DomainCrawler {
     private final CrawlerConfig config;
     private final FrontierQueue frontier;
     private static final Logger log = LoggerFactory.getLogger(DomainCrawler.class);
-    // maxPrintLinks is now configurable via CrawlerConfig
     private static final Set<Integer> RETRIABLE = Set.of(429, 502, 503, 504);
 
     public DomainCrawler(CrawlerConfig config, FrontierQueue frontier) {
