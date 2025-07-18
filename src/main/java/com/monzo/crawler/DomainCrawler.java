@@ -104,7 +104,7 @@ public final class DomainCrawler {
         }
     }
 
-    private void backoff(int statusCode) throws InterruptedException {
+    void backoff(int statusCode) throws InterruptedException {
         var delay = config.getBackoffBaseMs();
         var maxDelay = config.getBackoffMaxMs();
         var jitterMax = config.getBackoffJitterMs();

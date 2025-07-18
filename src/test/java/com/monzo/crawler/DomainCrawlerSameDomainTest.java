@@ -54,7 +54,12 @@ class DomainCrawlerSameDomainTest {
                 "https://evil.com/",
                 "https://api.monzo.com/docs"));
 
-        new DomainCrawler(CFG, fq, fetcher).runCrawlLoop();
+        var crawler = spy(new DomainCrawler(CFG, fq, fetcher));
+        doNothing()
+            .when(crawler)
+            .backoff(anyInt());
+
+        crawler.runCrawlLoop();
 
         verify(fq).push("https://monzo.com/careers");
         verify(fq).push("https://api.monzo.com/docs");
@@ -76,7 +81,10 @@ class DomainCrawlerSameDomainTest {
         when(fetcher.fetchAndExtractLinks("https://monzo.com/home"))
             .thenThrow(fetchException);
 
-        new DomainCrawler(CFG, fq, fetcher).runCrawlLoop();
+        var crawler = spy(new DomainCrawler(CFG, fq, fetcher));
+        doNothing().when(crawler).backoff(anyInt());
+
+        crawler.runCrawlLoop();
 
         verifyNoInteractionsWithPush(fq);
     }
