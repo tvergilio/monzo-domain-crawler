@@ -3,7 +3,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: monzo-domain-crawler
     depends_on:
       redis:
         condition: service_healthy
@@ -14,6 +13,8 @@ services:
       - crawler-network
     volumes:
       - ./data:/app/data
+    deploy:
+      replicas: 2
 
   redis:
     image: redis:8.0-alpine

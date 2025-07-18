@@ -15,4 +15,4 @@ RUN mkdir -p /app/data && chown -R crawler:crawler /app
 USER crawler
 
 # Set the entry point to run the application
-ENTRYPOINT ["bin/app"]
+ENTRYPOINT ["bin/monzo-domain-crawler"]

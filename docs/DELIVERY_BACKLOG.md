@@ -24,8 +24,8 @@
 | **MDC‑5**  | Simple config constants                  | Hard‑coded defaults; overridable via env vars        | M        | XS   | Done |
 | **MDC‑6**  | Concurrency via virtual threads          | Fixed-size pool; configurable parallelism            | M        | S    | Done |
 | **MDC‑7**  | HTML fetch + parse                       | Java `HttpClient`; Jsoup extracts absolute links     | M        | S    | Done |
-| **MDC‑8**  | Same‑domain filter                       | Enqueue only links whose host endsWith(seedHost)     | M        | S   | In progress |
-| **MDC‑9**  | Output results                           | Print visited URL and its links to stdout            | M        | XS   | Not started |
+| **MDC‑8**  | Same‑domain filter                       | Enqueue only links whose host endsWith(seedHost)     | M        | S   | Done |
+| **MDC‑9**  | Output results and containerise                           | Print visited URL and its links to stdout; containerise services            | M        | M   | Done |
 | **MDC‑10** | Basic robots.txt check                   | `crawler-commons`; fetch once/host; 5 s timeout      | M        | S    | Not started |
 | **MDC‑11** | Unit tests (queue + parser)              | JUnit; target coverage ≥50 %                         | M        | XS   | Not started |
 | **MDC‑12** | README “Notable Decisions”               | How to run; trade‑offs; future work list             | M        | XS   | Not started |
