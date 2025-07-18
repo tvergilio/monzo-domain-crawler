@@ -17,14 +17,19 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '21'
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
       - name: Grant execute permission for Gradle wrapper
         run: chmod +x gradlew
-      - name: Build with Gradle
-        run: ./gradlew build --no-daemon
-      - name: Run tests
-        run: ./gradlew test --no-daemon
-      - name: Generate JaCoCo coverage report
-        run: ./gradlew jacocoTestReport --no-daemon
+      - name: Build, test, and generate JaCoCo report
+        run: ./gradlew build jacocoTestReport --no-daemon
       - name: Upload JaCoCo report artifact
         uses: actions/upload-artifact@v4
         with:
