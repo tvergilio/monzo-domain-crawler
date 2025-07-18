@@ -146,7 +146,8 @@ public final class DomainCrawler {
         }
         var rules = robotsCache.computeIfAbsent(host, h -> fetchRobotsRules(h));
         if (rules == null) {
-            return false;
+            // Default to allow if robots.txt cannot be fetched
+            return true;
         }
         return rules.isAllowed(url);
     }
