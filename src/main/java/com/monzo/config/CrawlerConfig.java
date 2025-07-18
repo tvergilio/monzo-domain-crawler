@@ -65,6 +65,10 @@ public final class CrawlerConfig {
         return backoffRetries;
     }
 
+    public int getRobotsTimeoutMs() {
+        return robotsTimeoutMs;
+    }
+
     public RedisConfig getRedisConfig() {
         return redisConfig;
     }
@@ -82,6 +86,7 @@ public final class CrawlerConfig {
         backoffMaxMs    = b.backoffMaxMs;
         backoffJitterMs = b.backoffJitterMs;
         backoffRetries  = b.backoffRetries;
+        robotsTimeoutMs = b.robotsTimeoutMs;
         redisConfig     = b.redisConfig;
     }
 
@@ -97,6 +102,7 @@ public final class CrawlerConfig {
     private final int         backoffMaxMs;
     private final int         backoffJitterMs;
     private final int         backoffRetries;
+    private final int         robotsTimeoutMs;
     private final RedisConfig redisConfig;
 
     /* ------------------------------------------------------------------ *
@@ -125,6 +131,7 @@ public final class CrawlerConfig {
                     .setBackoffMaxMs(config.backoffMaxMs)
                     .setBackoffJitterMs(config.backoffJitterMs)
                     .setBackoffRetries(config.backoffRetries)
+                    .setRobotsTimeoutMs(config.robotsTimeoutMs)
                     .setRedisConfig(new RedisConfig(config.redis.host, config.redis.port));
         } catch (Exception e) {
             throw new RuntimeException("Failed to load configuration: " + e.getMessage(), e);
@@ -153,6 +160,7 @@ public final class CrawlerConfig {
         private int         backoffMaxMs = 10000;
         private int         backoffJitterMs = 500;
         private int         backoffRetries = 4;
+        private int         robotsTimeoutMs = 5000;
         private RedisConfig redisConfig;
 
         public Builder setStartUrl(String v) {
@@ -195,32 +203,50 @@ public final class CrawlerConfig {
             return this;
         }
 
+        public Builder setRobotsTimeoutMs(int v) {
+            robotsTimeoutMs = v;
+            return this;
+        }
+
         public Builder setRedisConfig(RedisConfig v) {
             redisConfig = v;
             return this;
         }
 
         public CrawlerConfig build() {
-            if (startUrl == null)
+            if (startUrl == null) {
                 throw new IllegalArgumentException("startUrl must not be null");
-            if (redisConfig == null)
+            }
+            if (redisConfig == null) {
                 throw new IllegalArgumentException("redisConfig must not be null");
-            if (timeoutMs <= 0)
+            }
+            if (timeoutMs <= 0) {
                 throw new IllegalArgumentException("Timeout must be positive");
-            if (concurrency <= 0)
+            }
+            if (concurrency <= 0) {
                 throw new IllegalArgumentException("Concurrency must be positive");
-            if (maxDepth <= 0)
+            }
+            if (maxDepth <= 0) {
                 throw new IllegalArgumentException("Max depth must be positive");
-            if (backoffBaseMs <= 0)
+            }
+            if (backoffBaseMs <= 0) {
                 throw new IllegalArgumentException("backoffBaseMs must be positive");
-            if (backoffMaxMs <= 0)
+            }
+            if (backoffMaxMs <= 0) {
                 throw new IllegalArgumentException("backoffMaxMs must be positive");
-            if (backoffBaseMs > backoffMaxMs)
+            }
+            if (backoffBaseMs > backoffMaxMs) {
                 throw new IllegalArgumentException("backoffBaseMs must be less than or equal to backoffMaxMs");
-            if (backoffJitterMs < 0)
+            }
+            if (backoffJitterMs < 0) {
                 throw new IllegalArgumentException("backoffJitterMs must be non-negative");
-            if (backoffRetries < 1)
+            }
+            if (backoffRetries < 1) {
                 throw new IllegalArgumentException("backoffRetries must be at least 1");
+            }
+            if (robotsTimeoutMs <= 0) {
+                throw new IllegalArgumentException("robotsTimeoutMs must be positive");
+            }
             return new CrawlerConfig(this);
         }
     }
@@ -239,6 +265,7 @@ public final class CrawlerConfig {
         public int    backoffMaxMs;
         public int    backoffJitterMs;
         public int    backoffRetries = 5;
+        public int    robotsTimeoutMs = 5000;
         public RedisYaml redis;
 
         public static final class RedisYaml {
@@ -246,4 +273,5 @@ public final class CrawlerConfig {
             public int    port;
         }
     }
+
 }
