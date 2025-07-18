@@ -1,5 +1,9 @@
 plugins {
     id 'java'
+    id 'application'
+}
+application {
+    mainClass = 'com.monzo.crawler.DomainCrawler'
 }
 
 group = 'com.monzo'
@@ -11,6 +15,7 @@ repositories {
 
 dependencies {
     implementation 'redis.clients:jedis:6.0.0'
+    implementation 'org.slf4j:slf4j-simple:2.0.17'   
     
     // Testcontainers for Redis integration testing
     def testcontainersVersion = '1.21.3'
