@@ -87,8 +87,14 @@ public final class DomainCrawler {
                 }
             }
         } catch (RetriableStatusException re) {
-            backoff(re.getStatusCode());
-            return;
+            // Treat 429 (Too Many Requests), 502 (Bad Gateway), 503 (Service Unavailable), and 504 (Gateway Timeout) as retriable
+            int code = re.getStatusCode();
+            if (code == 429 || code == 502 || code == 503 || code == 504) {
+                backoff(code);
+                return;
+            } else {
+                System.err.printf("Non-retriable status code %d for %s%n", code, url);
+            }
         } catch (Exception e) {
             System.err.printf("Failed to fetch or extract links from %s: %s%n", url, e.getMessage());
         }
