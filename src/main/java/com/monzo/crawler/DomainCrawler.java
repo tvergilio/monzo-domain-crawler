@@ -6,6 +6,7 @@ import java.util.Random;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
+import java.net.URI;
 
 import com.monzo.config.CrawlerConfig;
 import com.monzo.queue.FrontierQueue;
@@ -18,13 +19,20 @@ import com.monzo.queue.RedisFrontierQueue;
  * Parallelism is configurable via the RedisConfig.
  */
 public final class DomainCrawler {
+    private final HtmlFetcher htmlFetcher;
     private static final Random RANDOM = new Random();
     private final CrawlerConfig config;
     private final FrontierQueue frontier;
 
     public DomainCrawler(CrawlerConfig config, FrontierQueue frontier) {
+        this(config, frontier, new HtmlFetcher());
+    }
+
+    // For testing
+    public DomainCrawler(CrawlerConfig config, FrontierQueue frontier, HtmlFetcher htmlFetcher) {
         this.config = Objects.requireNonNull(config, "config must not be null");
         this.frontier = Objects.requireNonNull(frontier, "frontier must not be null");
+        this.htmlFetcher = Objects.requireNonNull(htmlFetcher, "htmlFetcher must not be null");
     }
 
     public CrawlerConfig getConfig() {
@@ -60,13 +68,39 @@ public final class DomainCrawler {
         System.out.println("Crawl loop finished.");
     }
 
-    private void crawl(String url) throws InterruptedException {
+    void crawl(String url) throws InterruptedException {
         System.out.printf("Crawling %s%n", url);
+        var seedHost = getHost(config.getStartUrl());
+        var urlHost = getHost(url);
+        if (!sameDomain(seedHost, urlHost)) {
+            System.err.printf("[WARN] Attempted to crawl %s, but host %s does not match seed host %s%n", url, urlHost, seedHost);
+            assert sameDomain(seedHost, urlHost) : "Attempted to crawl a different domain URL";
+        }
         var status = simulateFetch(url);
         if (status == 429 || status == 503) {
             backoff(status);
-        } else {
-            Thread.sleep(100);
+            return;
+        }
+        try {
+            var links = htmlFetcher.fetchAndExtractLinks(url);
+            for (var link : links) {
+                var linkHost = getHost(link);
+                if (sameDomain(seedHost, linkHost)) {
+                    frontier.push(link);
+                }
+            }
+        } catch (Exception e) {
+            System.err.printf("Failed to fetch or extract links from %s: %s%n", url, e.getMessage());
+        }
+        Thread.sleep(100);
+    }
+
+
+    private static String getHost(String url) {
+        try {
+            return URI.create(url).getHost();
+        } catch (Exception e) {
+            return null;
         }
     }
 
@@ -85,7 +119,14 @@ public final class DomainCrawler {
         }
     }
 
-    private static int simulateFetch(String url) {
+    static boolean sameDomain(String seedHost, String linkHost) {
+        if (seedHost == null || linkHost == null) {
+            return false;
+        }
+        return linkHost.equals(seedHost) || linkHost.endsWith("." + seedHost);
+    }
+
+    int simulateFetch(String url) {
         var codes = new int[] { 200, 429, 503 };
         return codes[RANDOM.nextInt(codes.length)];
     }
