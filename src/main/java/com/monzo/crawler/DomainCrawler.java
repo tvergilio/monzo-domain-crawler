@@ -79,7 +79,9 @@ public final class DomainCrawler {
         }
         try {
             var links = htmlFetcher.fetchAndExtractLinks(url);
-            System.out.printf("%s -> %d links%n", url, links.size());
+            // Print visited URL and its links to stdout, prefixing with timestamp and context
+            System.out.printf("%s | %-60s -> %d links: %s%n",
+                java.time.Instant.now(), url, links.size(), links);
             for (var link : links) {
                 var linkHost = getHost(link);
                 if (sameDomain(seedHost, linkHost)) {
