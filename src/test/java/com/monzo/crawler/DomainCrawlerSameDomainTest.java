@@ -55,9 +55,11 @@ class DomainCrawlerSameDomainTest {
                 "https://api.monzo.com/docs"));
 
         var crawler = spy(new DomainCrawler(CFG, fq, fetcher));
-        doNothing()
+        doNothing().when(crawler).backoff(anyInt());
+        // Mock robots.txt check to always allow
+        doReturn(true)
             .when(crawler)
-            .backoff(anyInt());
+            .isAllowedByRobots(anyString());
 
         crawler.runCrawlLoop();
 

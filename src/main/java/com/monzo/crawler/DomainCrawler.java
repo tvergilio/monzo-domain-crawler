@@ -1,17 +1,25 @@
-
 package com.monzo.crawler;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ConcurrentMap;
 import java.util.stream.IntStream;
+import crawlercommons.robots.BaseRobotRules;
+import crawlercommons.robots.SimpleRobotRulesParser;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 
 import com.monzo.config.CrawlerConfig;
 import com.monzo.queue.FrontierQueue;
@@ -23,6 +31,7 @@ import com.monzo.queue.RedisFrontierQueue;
  * Orchestrates the crawl loop using a fixed-size pool of virtual threads.
  * Parallelism is configurable via the RedisConfig.
  */
+
 public final class DomainCrawler {
     private final HtmlFetcher htmlFetcher;
     private static final Random RANDOM = new Random();
@@ -30,6 +39,11 @@ public final class DomainCrawler {
     private final FrontierQueue frontier;
     private static final Logger log = LoggerFactory.getLogger(DomainCrawler.class);
     private static final Set<Integer> RETRIABLE = Set.of(429, 502, 503, 504);
+
+    // Thread-safe per-instance robots.txt cache. For demo-scale, this is simple and robust.
+    // If requirements change to scale to many containers, we should consider a Redis-backed cache for cross-instance sharing.
+    private final ConcurrentMap<String, BaseRobotRules> robotsCache = new ConcurrentHashMap<>();
+    private static final int ROBOTS_TIMEOUT_MS = 5000;
 
     public DomainCrawler(CrawlerConfig config, FrontierQueue frontier) {
         this(config, frontier, new HtmlFetcher());
@@ -83,10 +97,17 @@ public final class DomainCrawler {
             return;
         }
 
+        // robots.txt check: only crawl if allowed
+        if (!isAllowedByRobots(url)) {
+            log.info("Disallowed by robots.txt: {}", url);
+            return;
+        }
+
         try {
             var links = htmlFetcher.fetchAndExtractLinks(url);
             var filteredLinks = links.stream()
                     .filter(l -> sameDomain(seedHost, host(l)))
+                    .filter(this::isAllowedByRobots)
                     .distinct()
                     .toList();
             prettyPrint(url, Set.copyOf(filteredLinks));
@@ -106,6 +127,42 @@ public final class DomainCrawler {
 
         } catch (Exception ex) {
             log.error("Fetch failed for {}: {}", url, ex.getMessage());
+        }
+    }
+    /**
+     * Returns true if the given URL is allowed by robots.txt for its host.
+     * Fetches and caches robots.txt per host, with a 5s timeout.
+     */
+        boolean isAllowedByRobots(String url) {
+        var host = host(url);
+        if (host == null) {
+            return false;
+        }
+        var rules = robotsCache.computeIfAbsent(host, h -> fetchRobotsRules(h));
+        return rules == null || rules.isAllowed(url);
+    }
+
+    /**
+     * Fetch and parse robots.txt for a host, with timeout. Returns rules or null on error.
+     */
+    private BaseRobotRules fetchRobotsRules(String host) {
+        try {
+            var robotsUrl = "https://" + host + "/robots.txt";
+            var client = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofMillis(ROBOTS_TIMEOUT_MS))
+                    .build();
+            var req = HttpRequest.newBuilder()
+                    .uri(URI.create(robotsUrl))
+                    .timeout(Duration.ofMillis(ROBOTS_TIMEOUT_MS))
+                    .GET()
+                    .build();
+            var resp = client.send(req, HttpResponse.BodyHandlers.ofByteArray());
+            var body = resp.body();
+            var parser = new SimpleRobotRulesParser();
+            return parser.parseContent(robotsUrl, body, "text/plain", List.of("monzo-crawler"));
+        } catch (Exception e) {
+            log.warn("robots.txt fetch failed for {}: {}", host, e.getMessage());
+            return null;
         }
     }
 
