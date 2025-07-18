@@ -10,11 +10,11 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
+
 import crawlercommons.robots.BaseRobotRules;
 import crawlercommons.robots.SimpleRobotRulesParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -41,13 +41,10 @@ public final class DomainCrawler {
     // Thread‑safe per‑instance robots.txt cache. For demo‑scale, this is simple and robust.
     // If requirements change to scale to many containers, we should consider a Redis‑backed cache for cross‑instance sharing.
     private final ConcurrentMap<String, BaseRobotRules> robotsCache = new ConcurrentHashMap<>();
-    private static final int ROBOTS_TIMEOUT_MS = 5000;
+    private final int robotsTimeoutMs;
+    private final HttpClient robotsClient;
 
     // One shared client per crawler instance: avoids recreating sockets for every robots.txt request.
-    private final HttpClient robotsClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofMillis(ROBOTS_TIMEOUT_MS))
-            .build();
-
     public DomainCrawler(CrawlerConfig config, FrontierQueue frontier) {
         this(config, frontier, new HtmlFetcher());
     }
@@ -57,6 +54,10 @@ public final class DomainCrawler {
         this.config = Objects.requireNonNull(config, "config must not be null");
         this.frontier = Objects.requireNonNull(frontier, "frontier must not be null");
         this.htmlFetcher = Objects.requireNonNull(htmlFetcher, "htmlFetcher must not be null");
+        this.robotsTimeoutMs = config.getRobotsTimeoutMs();
+        this.robotsClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofMillis(robotsTimeoutMs))
+                .build();
     }
 
     public CrawlerConfig getConfig() {
@@ -80,7 +81,7 @@ public final class DomainCrawler {
                         crawl(url);
                     }
                 } catch (Exception e) {
-                    System.err.printf("Crawl error: %s%n", e.getMessage());
+                    log.error("Crawl task failed: {}", e.getMessage());
                 }
             };
             IntStream.range(0, parallelism).boxed().forEach(i -> executor.submit(task));
@@ -89,7 +90,7 @@ public final class DomainCrawler {
         } catch (InterruptedException ie) {
             Thread.currentThread().interrupt();
         }
-        System.out.println("Crawl loop finished.");
+        log.info("Crawl loop finished.");
     }
 
     void crawl(String url) {
@@ -154,7 +155,7 @@ public final class DomainCrawler {
             var robotsUrl = "https://" + host + "/robots.txt";
             var req = HttpRequest.newBuilder()
                     .uri(URI.create(robotsUrl))
-                    .timeout(Duration.ofMillis(ROBOTS_TIMEOUT_MS))
+                    .timeout(Duration.ofMillis(robotsTimeoutMs))
                     .GET()
                     .build();
             var resp = robotsClient.send(req, HttpResponse.BodyHandlers.ofByteArray());
@@ -191,7 +192,7 @@ public final class DomainCrawler {
         var attempt = 1;
         while (attempt <= maxRetries && delay <= maxDelay) {
             var jitter = ThreadLocalRandom.current().nextInt(jitterMax + 1);
-            System.out.printf("HTTP %d – backing off %d ms (%d/%d)%n", statusCode, delay + jitter, attempt, maxRetries);
+            log.info("Backing off for HTTP {}: attempt {}/{}", statusCode, attempt, maxRetries);
             Thread.sleep(delay + jitter);
             delay = Math.min(delay * 2, maxDelay);
             attempt++;
