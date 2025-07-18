@@ -1,0 +1,84 @@
+package com.monzo.crawler;
+
+import com.monzo.config.CrawlerConfig;
+import com.monzo.config.RedisConfig;
+import com.monzo.queue.FrontierQueue;
+import org.junit.jupiter.api.*;
+
+import java.time.Duration;
+import java.util.Queue;
+import java.util.Set;
+import java.util.concurrent.ConcurrentLinkedQueue;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * Integration tests for DomainCrawler same-domain behaviour.
+ * <p>
+ * These tests hit the live network and therefore are disabled by default.
+ */
+@DisplayName("DomainCrawler Same-Domain Integration Tests")
+@Disabled("Depends on external network and remote site; enable manually for full run")
+class DomainCrawlerSameDomainIntegrationTest {
+
+    /** Simple in-memory queue to observe pushes without Redis. */
+    private static final class InMemoryFrontier implements FrontierQueue {
+        private final Queue<String> q = new ConcurrentLinkedQueue<>();
+
+        @Override public void push(String url) { 
+            q.add(url); 
+        }
+        @Override public String pop() { 
+            return q.poll(); 
+        }
+        @Override public boolean isEmpty() { 
+            return q.isEmpty(); 
+        }
+
+        Set<String> snapshot() { 
+            return Set.copyOf(q); 
+        }
+    }
+
+    @Test
+    @DisplayName("crawler never enqueues different domain links (live wikipedia.org)")
+    void crawlerStaysOnSeedDomain() throws Exception {
+        // Given
+        var seed = "https://en.wikipedia.org/wiki/Main_Page";
+
+        var cfg = CrawlerConfig.builder()
+                .setStartUrl(seed)
+                .setConcurrency(4)
+                .setMaxDepth(1)                 // keep crawl short
+                .setRedisConfig(RedisConfig.disabled()) // unused for in-mem queue
+                .build();
+
+        var frontier = new InMemoryFrontier();
+        frontier.push(seed);
+
+        var crawler = new DomainCrawler(cfg, frontier, new HtmlFetcher());
+
+        // When
+        crawler.runCrawlLoop();
+
+        // Then
+        var seedHost = "en.wikipedia.org";
+        assertFalse(frontier.snapshot().isEmpty(), "Crawler should have discovered some links");
+
+        boolean anyDifferentDomain = frontier.snapshot().stream()
+                .map(DomainCrawlerSameDomainIntegrationTest::host)
+                .anyMatch(h -> h != null && !h.endsWith(seedHost));
+
+        assertFalse(anyDifferentDomain, "No enqueued link should point outside the wikipedia.org domain");
+    }
+
+    /* helper */
+    private static String host(String url) {
+        try { 
+            return URI.create(url)
+            .getHost(); 
+        } catch (Exception e) { 
+            return null; 
+        }
+    }
+}

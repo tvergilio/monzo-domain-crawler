@@ -44,8 +44,12 @@ public final class HtmlFetcher {
                 .GET()
                 .build();
         var response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() != 200) {
-            throw new RuntimeException("Failed to fetch: " + url + " (status " + response.statusCode() + ")");
+        int status = response.statusCode();
+        if (status == 429 || status == 503) {
+            throw new RetriableStatusException(status, "Retriable HTTP status " + status + " for " + url);
+        }
+        if (status != 200) {
+            throw new RuntimeException("Failed to fetch: " + url + " (status " + status + ")");
         }
         var contentType = response.headers().firstValue("Content-Type").orElse("").toLowerCase();
         if (!contentType.contains("text/html")) {
