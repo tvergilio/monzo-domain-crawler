@@ -2,16 +2,16 @@ package com.monzo.crawler;
 
 import java.util.List;
 import java.util.Objects;
-import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
+
 import crawlercommons.robots.BaseRobotRules;
 import crawlercommons.robots.SimpleRobotRulesParser;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,19 +31,22 @@ import com.monzo.queue.RedisFrontierQueue;
  * Orchestrates the crawl loop using a fixed-size pool of virtual threads.
  * Parallelism is configurable via the RedisConfig.
  */
-
 public final class DomainCrawler {
     private final HtmlFetcher htmlFetcher;
-    private static final Random RANDOM = new Random();
     private final CrawlerConfig config;
     private final FrontierQueue frontier;
     private static final Logger log = LoggerFactory.getLogger(DomainCrawler.class);
     private static final Set<Integer> RETRIABLE = Set.of(429, 502, 503, 504);
 
-    // Thread-safe per-instance robots.txt cache. For demo-scale, this is simple and robust.
-    // If requirements change to scale to many containers, we should consider a Redis-backed cache for cross-instance sharing.
+    // Thread‑safe per‑instance robots.txt cache. For demo‑scale, this is simple and robust.
+    // If requirements change to scale to many containers, we should consider a Redis‑backed cache for cross‑instance sharing.
     private final ConcurrentMap<String, BaseRobotRules> robotsCache = new ConcurrentHashMap<>();
     private static final int ROBOTS_TIMEOUT_MS = 5000;
+
+    // One shared client per crawler instance: avoids recreating sockets for every robots.txt request.
+    private final HttpClient robotsClient = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofMillis(ROBOTS_TIMEOUT_MS))
+            .build();
 
     public DomainCrawler(CrawlerConfig config, FrontierQueue frontier) {
         this(config, frontier, new HtmlFetcher());
@@ -118,7 +121,7 @@ public final class DomainCrawler {
                 try {
                     backoff(r.getStatusCode());
                 } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt(); 
+                    Thread.currentThread().interrupt();
                     return; // exit crawl early
                 }
             } else {
@@ -129,37 +132,34 @@ public final class DomainCrawler {
             log.error("Fetch failed for {}: {}", url, ex.getMessage());
         }
     }
+
     /**
      * Returns true if the given URL is allowed by robots.txt for its host.
-     * Fetches and caches robots.txt per host, with a 5s timeout.
+     * Fetches and caches robots.txt per host, with a 5 s timeout.
      */
-        boolean isAllowedByRobots(String url) {
+    boolean isAllowedByRobots(String url) {
         var host = host(url);
         if (host == null) {
             return false;
         }
-        var rules = robotsCache.computeIfAbsent(host, h -> fetchRobotsRules(h));
+        var rules = robotsCache.computeIfAbsent(host, this::fetchRobotsRules);
         return rules == null || rules.isAllowed(url);
     }
 
     /**
-     * Fetch and parse robots.txt for a host, with timeout. Returns rules or null on error.
+     * Fetch and parse robots.txt for a host. Returns rules or <code>null</code> on error.
      */
     private BaseRobotRules fetchRobotsRules(String host) {
         try {
             var robotsUrl = "https://" + host + "/robots.txt";
-            var client = HttpClient.newBuilder()
-                    .connectTimeout(Duration.ofMillis(ROBOTS_TIMEOUT_MS))
-                    .build();
             var req = HttpRequest.newBuilder()
                     .uri(URI.create(robotsUrl))
                     .timeout(Duration.ofMillis(ROBOTS_TIMEOUT_MS))
                     .GET()
                     .build();
-            var resp = client.send(req, HttpResponse.BodyHandlers.ofByteArray());
-            var body = resp.body();
+            var resp = robotsClient.send(req, HttpResponse.BodyHandlers.ofByteArray());
             var parser = new SimpleRobotRulesParser();
-            return parser.parseContent(robotsUrl, body, "text/plain", List.of("monzo-crawler"));
+            return parser.parseContent(robotsUrl, resp.body(), "text/plain", List.of("monzo-crawler"));
         } catch (Exception e) {
             log.warn("robots.txt fetch failed for {}: {}", host, e.getMessage());
             return null;
@@ -190,7 +190,7 @@ public final class DomainCrawler {
         var maxRetries = config.getBackoffRetries();
         var attempt = 1;
         while (attempt <= maxRetries && delay <= maxDelay) {
-            var jitter = RANDOM.nextInt(jitterMax + 1);
+            var jitter = ThreadLocalRandom.current().nextInt(jitterMax + 1);
             System.out.printf("HTTP %d – backing off %d ms (%d/%d)%n", statusCode, delay + jitter, attempt, maxRetries);
             Thread.sleep(delay + jitter);
             delay = Math.min(delay * 2, maxDelay);
@@ -205,8 +205,7 @@ public final class DomainCrawler {
         if (linkHost.equals(seedHost)) {
             return true;
         }
-        // Ensure subdomain match is strict: must be ".seedHost" and not part of a
-        // longer suffix
+        // Ensure sub‑domain match is strict: must be ".seedHost" and not part of a longer suffix
         var idx = linkHost.length() - seedHost.length() - 1;
         return idx >= 0 && linkHost.charAt(idx) == '.' && linkHost.endsWith(seedHost);
     }
