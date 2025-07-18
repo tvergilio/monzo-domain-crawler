@@ -41,6 +41,7 @@ public final class DomainCrawler {
     // Thread‑safe per‑instance robots.txt cache. For demo‑scale, this is simple and robust.
     // If requirements change to scale to many containers, we should consider a Redis‑backed cache for cross‑instance sharing.
     private final ConcurrentMap<String, BaseRobotRules> robotsCache = new ConcurrentHashMap<>();
+    private static final String ROBOTS_USER_AGENT = "monzo-crawler";
     private final int robotsTimeoutMs;
     private final HttpClient robotsClient;
 
@@ -156,6 +157,7 @@ public final class DomainCrawler {
             var req = HttpRequest.newBuilder()
                     .uri(URI.create(robotsUrl))
                     .timeout(Duration.ofMillis(robotsTimeoutMs))
+                    .header("User-Agent", ROBOTS_USER_AGENT)
                     .GET()
                     .build();
             var resp = robotsClient.send(req, HttpResponse.BodyHandlers.ofByteArray());
