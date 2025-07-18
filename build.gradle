@@ -1,6 +1,7 @@
 plugins {
     id 'java'
     id 'application'
+    id 'jacoco'
 }
 application {
     mainClass = 'com.monzo.crawler.DomainCrawler'
@@ -41,5 +42,13 @@ testing {
         test {
             useJUnitJupiter('5.10.0')
         }
+    }
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
     }
 }
