@@ -13,6 +13,15 @@ import static org.mockito.Mockito.*;
 
 /**
  * Unit tests covering robots.txt handling in {@link DomainCrawler}.
+ *
+ * <p>These tests verify that the crawler correctly honours robots.txt rules by:
+ * <ul>
+ *   <li>Skipping links disallowed by robots.txt</li>
+ *   <li>Enqueuing all links if robots.txt allows all</li>
+ *   <li>Enqueuing no links if robots.txt disallows all</li>
+ * </ul>
+ *
+ * <p>All URLs use the Wikipedia domain for consistency with configuration.
  */
 @DisplayName("DomainCrawler robots.txt behaviour")
 class DomainCrawlerRobotsTest {
@@ -33,6 +42,12 @@ class DomainCrawlerRobotsTest {
                 .thenReturn(null);
     }
 
+
+    /**
+     * Verifies that the crawler skips links disallowed by robots.txt.
+     *
+     * <p>Only links not ending with <code>/disallowed</code> are permitted.
+     */
     @Test
     @DisplayName("crawler skips links disallowed by robots.txt")
     void skipsDisallowedLinks() throws Exception {
@@ -48,6 +63,10 @@ class DomainCrawlerRobotsTest {
         verify(frontier, never()).push(START_URL + "/disallowed");
     }
 
+
+    /**
+     * Verifies that the crawler enqueues all links if robots.txt allows all.
+     */
     @Test
     @DisplayName("crawler enqueues all links if robots.txt allows all")
     void enqueuesAllIfRobotsAllowsAll() throws Exception {
@@ -63,6 +82,10 @@ class DomainCrawlerRobotsTest {
         verify(frontier).push(START_URL + "/two");
     }
 
+
+    /**
+     * Verifies that the crawler enqueues no links if robots.txt disallows all.
+     */
     @Test
     @DisplayName("crawler enqueues no links if robots.txt disallows all")
     void enqueuesNoneIfRobotsDisallowsAll() throws Exception {
@@ -78,7 +101,11 @@ class DomainCrawlerRobotsTest {
     }
 
     /**
-     * Creates a {@link DomainCrawler} with mocked {@link HtmlFetcher} and robots-rule predicate.
+     * Creates a {@link DomainCrawler} with mocked {@link HtmlFetcher} and a robots.txt rule predicate.
+     *
+     * @param links      the set of links to return from the fetcher
+     * @param robotsRule the predicate representing robots.txt allow/disallow logic
+     * @return a spy DomainCrawler instance with all dependencies mocked
      */
     private DomainCrawler crawlerWithMocks(Set<String> links, Predicate<String> robotsRule) throws Exception {
         var fetcher = mock(HtmlFetcher.class);
