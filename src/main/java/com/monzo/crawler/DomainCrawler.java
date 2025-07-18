@@ -3,9 +3,14 @@ package com.monzo.crawler;
 
 import java.util.Objects;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.net.URI;
 
 import com.monzo.config.CrawlerConfig;
@@ -23,6 +28,9 @@ public final class DomainCrawler {
     private static final Random RANDOM = new Random();
     private final CrawlerConfig config;
     private final FrontierQueue frontier;
+    private static final Logger log = LoggerFactory.getLogger(DomainCrawler.class);
+    // maxPrintLinks is now configurable via CrawlerConfig
+    private static final Set<Integer> RETRIABLE = Set.of(429, 502, 503, 504);
 
     public DomainCrawler(CrawlerConfig config, FrontierQueue frontier) {
         this(config, frontier, new HtmlFetcher());
@@ -68,47 +76,54 @@ public final class DomainCrawler {
         System.out.println("Crawl loop finished.");
     }
 
-    void crawl(String url) throws InterruptedException {
-        System.out.printf("Crawling %s%n", url);
-        var seedHost = getHost(config.getStartUrl());
-        var urlHost = getHost(url);
-        if (!sameDomain(seedHost, urlHost)) {
-            System.err.printf("[WARN] Attempted to crawl %s, but host %s does not match seed host %s%n", url, urlHost, seedHost);
-            // Guard: do not proceed if not same domain
+    void crawl(String url) {
+        var seedHost = host(config.getStartUrl());
+        var pageHost = host(url);
+        if (!sameDomain(seedHost, pageHost)) {
+            log.warn("Skip off-domain link: {} (host {}, seed {})", url, pageHost, seedHost);
             return;
         }
+
         try {
             var links = htmlFetcher.fetchAndExtractLinks(url);
-            // Print visited URL and its links to stdout, prefixing with timestamp and context
-            System.out.printf("%s | %-60s -> %d links: %s%n",
-                java.time.Instant.now(), url, links.size(), links);
-            for (var link : links) {
-                var linkHost = getHost(link);
-                if (sameDomain(seedHost, linkHost)) {
-                    frontier.push(link);
+            var filteredLinks = links.stream()
+                    .filter(l -> sameDomain(seedHost, host(l)))
+                    .distinct()
+                    .toList();
+            prettyPrint(url, Set.copyOf(filteredLinks));
+            filteredLinks.forEach(frontier::push);
+
+        } catch (RetriableStatusException r) {
+            if (RETRIABLE.contains(r.getStatusCode())) {
+                try {
+                    backoff(r.getStatusCode());
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt(); 
+                    return; // exit crawl early
                 }
-            }
-        } catch (RetriableStatusException re) {
-            // Treat 429 (Too Many Requests), 502 (Bad Gateway), 503 (Service Unavailable), and 504 (Gateway Timeout) as retriable
-            int code = re.getStatusCode();
-            if (code == 429 || code == 502 || code == 503 || code == 504) {
-                backoff(code);
-                return;
             } else {
-                System.err.printf("Non-retriable status code %d for %s%n", code, url);
+                log.warn("Non-retriable HTTP {} for {}", r.getStatusCode(), url);
             }
-        } catch (Exception e) {
-            System.err.printf("Failed to fetch or extract links from %s: %s%n", url, e.getMessage());
+
+        } catch (Exception ex) {
+            log.error("Fetch failed for {}: {}", url, ex.getMessage());
         }
-        Thread.sleep(100);
     }
 
-
-    private static String getHost(String url) {
+    private static String host(String u) {
         try {
-            return URI.create(url).getHost();
+            return URI.create(u).getHost();
         } catch (Exception e) {
             return null;
+        }
+    }
+
+    private void prettyPrint(String url, Set<String> links) {
+        synchronized (System.out) { // keep lines together in parallel runs
+            System.out.printf("%n%s  →  %d links%n", url, links.size());
+            links.stream()
+                    .sorted()
+                    .forEach(l -> System.out.printf("   • %s%n", l));
         }
     }
 
@@ -134,11 +149,11 @@ public final class DomainCrawler {
         if (linkHost.equals(seedHost)) {
             return true;
         }
-        // Ensure subdomain match is strict: must be ".seedHost" and not part of a longer suffix
+        // Ensure subdomain match is strict: must be ".seedHost" and not part of a
+        // longer suffix
         var idx = linkHost.length() - seedHost.length() - 1;
         return idx >= 0 && linkHost.charAt(idx) == '.' && linkHost.endsWith(seedHost);
     }
-
 
     public static void main(String[] args) {
         var config = CrawlerConfig.builderFromYaml().build();
