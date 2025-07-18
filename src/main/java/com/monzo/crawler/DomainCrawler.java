@@ -144,8 +144,17 @@ public final class DomainCrawler {
         if (host == null) {
             return false;
         }
-        var rules = robotsCache.computeIfAbsent(host, this::fetchRobotsRules);
-        return rules == null || rules.isAllowed(url);
+        var rules = robotsCache.get(host);
+        if (rules == null) {
+            rules = fetchRobotsRules(host);
+            if (rules != null) {
+                robotsCache.put(host, rules);
+            } else {
+                // Do not cache nulls; will retry next time
+                return false;
+            }
+        }
+        return rules.isAllowed(url);
     }
 
     /**
