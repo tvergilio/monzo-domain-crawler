@@ -123,7 +123,12 @@ public final class DomainCrawler {
         if (seedHost == null || linkHost == null) {
             return false;
         }
-        return linkHost.equals(seedHost) || linkHost.endsWith("." + seedHost);
+        if (linkHost.equals(seedHost)) {
+            return true;
+        }
+        // Ensure subdomain match is strict: must be ".seedHost" and not part of a longer suffix
+        var idx = linkHost.length() - seedHost.length() - 1;
+        return idx >= 0 && linkHost.charAt(idx) == '.' && linkHost.endsWith(seedHost);
     }
 
 
