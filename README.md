@@ -116,7 +116,7 @@ Prerequisites: Docker, JDK 21+.
 
 ---
 
-## Trade-offs and Decisions
+## Trade-offs
 
 - **Redis for Queue and Deduplication**: Chosen for atomicity, distributed scale and operational simplicity.
 - **Stateless Crawler**: Enables horizontal scaling and resilience to failure.
