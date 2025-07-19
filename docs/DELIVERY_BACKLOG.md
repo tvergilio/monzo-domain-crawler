@@ -28,7 +28,7 @@
 | **MDC‑9**  | Output results and containerise                           | Print visited URL and its links to stdout; containerise services            | M        | M   | Done |
 | **MDC‑10** | Basic robots.txt check                   | `crawler-commons`; fetch once/host; 5 s timeout      | M        | S    | Done |
 | **MDC‑11** | Unit tests (queue + parser)              | JUnit; target coverage ≥50 %                         | M        | XS   | Done |
-| **MDC‑12** | README “Notable Decisions”               | How to run; trade‑offs; future work list             | M        | XS   | Not started |
+| **MDC‑12** | README “Notable Decisions”               | How to run; trade‑offs; future work; diagrams             | M        | M   | Done |
 
 
 ---
@@ -41,4 +41,5 @@
 | **MDC‑14** | GitHub Actions CI             | `gradle build` workflow            | S        | XS   | Done |
 | **MDC‑15** | Graceful shutdown             | SIGTERM stops intake; await ≤2 s   | S        | S    | Not started |
 | **MDC‑16** | Prometheus metrics endpoint   | Micrometer core; expose `/metrics` | S        | S    | Not started |
+| **MDC‑17** | Automated Redis flush on startup | Clear queue and visited set before crawl starts; entrypoint script | C        | XS   | Not started |
 

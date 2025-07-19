@@ -1,0 +1,22 @@
+---
+config:
+  theme: neutral
+---
+flowchart LR
+    classDef actor fill:#cffafe,stroke:#06b6d4,stroke-width:2px,color:#0e7490
+    classDef redis fill:#fee2e2,stroke:#ef4444,stroke-width:2px,color:#991b1b
+    classDef script fill:#f1f5f9,stroke:#475569,stroke-width:1.5px,color:#1e293b,stroke-dasharray:4 3
+    subgraph CRAWLERS["Crawler Instances (n)"]
+        C1["Worker(s)"]:::actor
+    end
+    Lua(["Atomic Enqueue<br/>(Lua Script)"]):::script
+    subgraph REDIS["Shared State (Redis)"]
+        direction TB
+        Q[["frontier:queue<br/>LIST (FIFO)"]]:::redis
+        S[["frontier:seen<br/>SET (dedupe)"]]:::redis
+    end
+    C1 -->|BRPOP frontier:queue| Q
+    Q -->|URL| C1
+    C1 -->|Discovered URLs| Lua
+    Lua -->|SADD new URLs| S
+    Lua -->|RPUSH only unseen| Q

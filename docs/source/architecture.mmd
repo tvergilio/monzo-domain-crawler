@@ -1,0 +1,23 @@
+---
+config:
+  theme: neutral
+---
+graph TD
+    classDef crawler fill:#cffafe,stroke:#06b6d4,stroke-width:2px,color:#0e7490
+    classDef redis fill:#fee2e2,stroke:#ef4444,stroke-width:2px,color:#991b1b
+    classDef internet fill:#e5e7eb,stroke:#4b5563,stroke-width:2px,color:#1f2937
+    
+    Internet(("<br/><b>Internet</b><br/>Target Domain<br/><br/>")):::internet
+
+    subgraph "<b>Monzo Domain Crawler (Docker)</b>"
+        subgraph "<b>Crawler Service (Stateless)</b>"
+            Crawler1["<b>Crawler Instance 1</b>"]:::crawler
+            Crawler2["<b>Crawler Instance N</b>"]:::crawler
+        end
+        Redis[("<b>Redis</b><br/>Frontier Queue<br/>+ Seen Set")]:::redis
+    end
+
+    Internet -- "Fetch / Parse" <--> Crawler1
+    Internet -- "Fetch / Parse" <--> Crawler2
+    Crawler1 -- "Enqueue / Dequeue<br/>Dedupe" <--> Redis
+    Crawler2 -- "Enqueue / Dequeue<br/>Dedupe" <--> Redis
