@@ -1,0 +1,54 @@
+
+
+classDiagram
+    class DomainCrawler {
+        +runCrawlLoop(): void
+        +crawl(url: String): void
+        -frontier: FrontierQueue
+        -htmlFetcher: HtmlFetcher
+        -config: CrawlerConfig
+        -robotsHandler: RobotsTxtHandler
+    }
+
+    class FrontierQueue {
+        <<interface>>
+        +push(url: String): void
+        +pop(): String
+    }
+
+    class RedisFrontierQueue {
+        +push(url: String): void
+        +pop(): String
+        -seenSet : Set~String~  stored in Redis
+        -queueKey : String
+        -seenKey : String
+    }
+
+    class HtmlFetcher {
+        +fetchAndExtractLinks(url: String): Set~String~
+    }
+
+    class CrawlerConfig {
+        +getStartUrl(): String
+        +getConcurrency(): int
+        +getBackoffBaseMs(): long
+        +getBackoffMaxMs(): long
+        +getBackoffJitterMs(): int
+        +getBackoffRetries(): int
+    }
+
+    class RobotsTxtHandler {
+        +isAllowed(url: String): Boolean
+        +fetchRules(host: String): void
+        -cache : Map~String, RobotRules~
+    }
+
+    DomainCrawler --> FrontierQueue
+    DomainCrawler --> HtmlFetcher
+    DomainCrawler --> CrawlerConfig
+    DomainCrawler --> RobotsTxtHandler
+
+    FrontierQueue <|.. RedisFrontierQueue
+
+    note for RobotsTxtHandler "Per-instance cache (not shared)"
+
