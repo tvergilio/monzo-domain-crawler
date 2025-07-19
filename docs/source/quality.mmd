@@ -1,0 +1,35 @@
+---
+config:
+  theme: mc
+  layout: elk
+---
+flowchart TD
+    QA["<b>Quality &amp; Resilience</b>"] --> UT["<b>Unit Tests</b>"] & IT["<b>Integration</b>"] & CI["<b>CI/CD</b>"] & RS["<b>Resilience</b>"] & CP["<b>Compliance</b>"]
+    UT --> UT1["JUnit 5"] & UT2["Mockito"]
+    UT1 --> UT3["Core logic"] & UT4["Queue"] & UT5["Parser"]
+    IT --> IT1["Testcontainers"] & IT2["Redis"]
+    IT1 --> IT3["Distributed state"]
+    CI --> CI1["GitHub Actions"]
+    CI1 --> CI2["Build, test, coverage, caching"] & CI3["JaCoCo"] & CI4["SLF4J logs"]
+    RS --> RS1["Timeouts"] & RS2["Retries"] & RS3["Backoff, dedupe"]
+    CP --> CP1["robots.txt"] & CP2["Domain filter"]
+    CP1 --> CP3["Per-host rules"]
+    CP2 --> CP4["Same-domain only"]
+     QA:::root
+     QA:::root
+     UT:::unit
+     UT:::unit
+     IT:::integration
+     IT:::integration
+     CI:::ci
+     CI:::ci
+     RS:::resilience
+     RS:::resilience
+     CP:::compliance
+     CP:::compliance
+    classDef root fill:#f3f4f6,stroke:#0ea5e9,stroke-width:3px,color:#0f172a,rx:12px,ry:12px
+    classDef unit fill:#e0f2fe,stroke:#0284c7,stroke-width:2px,color:#0369a1,rx:12px,ry:12px
+    classDef integration fill:#fef9c3,stroke:#eab308,stroke-width:2px,color:#92400e,rx:12px,ry:12px
+    classDef ci fill:#f1f5f9,stroke:#64748b,stroke-width:2px,color:#334155,rx:12px,ry:12px
+    classDef resilience fill:#dcfce7,stroke:#22c55e,stroke-width:2px,color:#166534,rx:12px,ry:12px
+    classDef compliance fill:#fce7f3,stroke:#db2777,stroke-width:2px,color:#831843,rx:12px,ry:12px
